@@ -22,6 +22,7 @@ def load_defaults():
         print(f"No defaults file found at {defaults_file_path}")
         return {}
 
+
 def create_cloudformation_stack():
     """Run CloudFormation template to create EC2 instances and wait for completion."""
     # Load default parameters from the JSON file
@@ -31,9 +32,11 @@ def create_cloudformation_stack():
         print("No defaults loaded, cannot proceed with stack creation.")
         return
 
-    # Initialize CloudFormation and EC2 clients
-    cloudformation_client = boto3.client('cloudformation')
-    ec2_client = boto3.client('ec2')
+    region = defaults.get('Region', 'us-east-1')  # Default to 'us-east-1' if not specified
+
+    # Initialize CloudFormation and EC2 clients with the specified region
+    cloudformation_client = boto3.client('cloudformation', region_name=region)
+    ec2_client = boto3.client('ec2', region_name=region)
 
     # Define the CloudFormation template path within the repository
     template_file_path = os.path.join(os.getcwd(), "cloudformation", "launch-slaves.yaml")
