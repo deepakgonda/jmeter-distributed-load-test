@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+ENV/
+env/
+
+# JMeter result files
+*.jtl
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Python egg files
+*.egg-info/
+.eggs/
+
+# CloudFormation template files if you want to exclude them
+# cloudformation/*.yaml
+
+# Temporary or backup files
+*.bak
+*.swp
+*.swo
+
+# IDE-specific files
+.vscode/
+.idea/
+*.iml
+
+
+# Ignore everything in the load_test folder
+load_test/*
+
+# But track .jmx files in the load_test folder
+!load_test/*.jmx

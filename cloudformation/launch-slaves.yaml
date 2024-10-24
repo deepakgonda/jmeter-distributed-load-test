@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create EC2 instances for distributed JMeter load testing
+
+Parameters:
+  VpcId:
+    Description: VPC ID where EC2 instances will be launched
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-09cbe3a7a9cccc16e
+
+  SubnetId:
+    Description: Subnet ID where EC2 instances will be launched
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-044763f5a43e0053e
+
+  SSHKeyName:
+    Description: SSH key name to access the EC2 instances
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: com7-deeboon.pem
+
+  AMIId:
+    Description: AMI ID to launch the EC2 instances
+    Type: AWS::EC2::Image::Id
+    Default: ami-0885ade43bb4b988d
+
+  InstanceType:
+    Description: EC2 instance type (e.g., t2.micro, t3.medium)
+    Type: String
+    Default: t3.2xlarge
+    AllowedValues: 
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3.2xlarge
+
+  NumberOfInstances:
+    Description: Number of EC2 instances to create
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 10
+
+Resources:
+  EC2InstanceLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref AMIId
+      KeyName: !Ref SSHKeyName
+      SecurityGroups:
+        - !Ref InstanceSecurityGroup
+      UserData: 
+        Fn::Base64: 
+          !Sub |
+            #!/bin/bash
+            sudo apt update -y
+            sudo apt install -y git python3-venv python3-pip
+            cd /home/ubuntu/
+            if [ ! -d "load-test" ]; then
+              mkdir load-test
+            fi
+            cd load-test
+            git clone https://github.com/deepakgonda/jmeter-distributed-load-test.git
+            cd jmeter-distributed-load-test
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
+            nohup python3 slave.py &
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH, HTTP, and internal traffic on certain ports
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          SourceSecurityGroupId: !Ref InstanceSecurityGroup
+
+  EC2InstanceAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: 
+        - !Ref SubnetId
+      LaunchConfigurationName: !Ref EC2InstanceLaunchConfig
+      MinSize: !Ref NumberOfInstances
+      MaxSize: !Ref NumberOfInstances
+      DesiredCapacity: !Ref NumberOfInstances
+      Tags:
+        - Key: Name
+          Value: !Sub "Ubuntu-Jmeter-Load-Test-Slave-${AWS::StackName}-instance"
+          PropagateAtLaunch: true
+
+  EC2InstanceTags:
+    Type: AWS::EC2::Tag
+    Properties:
+      Resources: !Ref EC2InstanceAutoScalingGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "Ubuntu-Jmeter-Load-Test-Slave-${AWS::StackName}-1"
+
+Outputs:
+  EC2InstancePublicIP:
+    Description: The public IP of the first EC2 instance
+    Value: !GetAtt EC2InstanceAutoScalingGroup.PublicIp
