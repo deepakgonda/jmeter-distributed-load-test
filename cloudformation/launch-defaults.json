@@ -1,7 +1,7 @@
 {
     "VpcId": "vpc-09cbe3a7a9cccc16e",
     "SubnetId": "subnet-044763f5a43e0053e",
-    "SSHKeyName": "com7-deeboon.pem",
+    "SSHKeyName": "com7-deeboon",
     "AMIId": "ami-0885ade43bb4b988d",
     "InstanceType": "t3.2xlarge",
     "NumberOfInstances": "1",
