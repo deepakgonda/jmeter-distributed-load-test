@@ -26,16 +26,6 @@ Parameters:
     Description: EC2 instance type (e.g., t2.micro, t3.medium)
     Type: String
     Default: t3.2xlarge
-    AllowedValues: 
-      - t2.micro
-      - t2.small
-      - t2.medium
-      - t3.micro
-      - t3.small
-      - t3.medium
-      - t3.large
-      - t3.xlarge
-      - t3.2xlarge
 
   NumberOfInstances:
     Description: Number of EC2 instances to create
@@ -97,22 +87,6 @@ Resources:
           FromPort: 5000
           ToPort: 5000
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref InstanceSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 8000
-          ToPort: 8000
-          SourceSecurityGroupId: !Ref InstanceSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          SourceSecurityGroupId: !Ref InstanceSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 5000
-          ToPort: 5000
-          SourceSecurityGroupId: !Ref InstanceSecurityGroup
 
   EC2InstanceAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -127,14 +101,6 @@ Resources:
         - Key: Name
           Value: !Sub "Ubuntu-Jmeter-Load-Test-Slave-${AWS::StackName}-instance"
           PropagateAtLaunch: true
-
-  EC2InstanceTags:
-    Type: AWS::EC2::Tag
-    Properties:
-      Resources: !Ref EC2InstanceAutoScalingGroup
-      Tags:
-        - Key: Name
-          Value: !Sub "Ubuntu-Jmeter-Load-Test-Slave-${AWS::StackName}-1"
 
 Outputs:
   EC2InstancePublicIP:
