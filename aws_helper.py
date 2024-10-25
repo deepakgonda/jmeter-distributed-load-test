@@ -230,16 +230,15 @@ def find_existing_instances():
         instance_ids = []
         stopped_instances = []
         running_instances = []
-        terminated_instances = []
         
-        # Classify each instance based on its state
+        # Classify each instance based on its state, ignoring terminated instances
         for reservation in instances['Reservations']:
             for instance in reservation['Instances']:
                 instance_id = instance['InstanceId']
                 state = instance['State']['Name']
                 
                 if state == 'terminated':
-                    terminated_instances.append(instance_id)
+                    continue  # Skip terminated instances entirely
                 elif state == 'stopped':
                     stopped_instances.append(instance_id)
                 elif state == 'running':
@@ -249,7 +248,7 @@ def find_existing_instances():
                     instance_ids.append(instance_id)  # Include pending instances as well
 
         print(f"Found {len(instance_ids)} instances with tag 'Ubuntu-Jmeter-Load-Test-Slave-*'.")
-        print(f"Instances running: {len(running_instances)}, stopped: {len(stopped_instances)}, terminated: {len(terminated_instances)}")
+        print(f"Instances running: {len(running_instances)}, stopped: {len(stopped_instances)}")
         
         # Start stopped instances
         if stopped_instances:
@@ -257,20 +256,24 @@ def find_existing_instances():
             ec2_client.start_instances(InstanceIds=stopped_instances)
             instance_ids.extend(stopped_instances)
 
-        # Wait for all instances (running + started) to reach the running state
-        print("Waiting for all instances to be in 'running' state...")
-        ec2_client.get_waiter('instance_running').wait(InstanceIds=instance_ids)
+        # Wait for all instances (running + started) to reach the running state, if any instances are left to wait for
+        if instance_ids:
+            print("Waiting for all instances to be in 'running' state...")
+            ec2_client.get_waiter('instance_running').wait(InstanceIds=instance_ids)
 
-        # Re-fetch IP data now that all instances should be running
-        ip_data = get_instance_public_ips(ec2_client, instance_ids)
-        
+            # Re-fetch IP data now that all instances should be running
+            ip_data = get_instance_public_ips(ec2_client, instance_ids)
+        else:
+            print("No running or stopped instances found to wait for.")
+            ip_data = []
+
         # Load existing IP data from file and filter out terminated instances
         if os.path.exists(INSTANCE_IPS_FILE):
             with open(INSTANCE_IPS_FILE, 'r') as f:
                 existing_ips = json.load(f)
             
-            # Remove any instances in the file that are terminated or no longer exist
-            updated_ips = [entry for entry in existing_ips if entry['InstanceId'] not in terminated_instances]
+            # Remove any instances in the file that no longer exist or are terminated
+            updated_ips = [entry for entry in existing_ips if entry['InstanceId'] in instance_ids]
             updated_ips.extend([ip for ip in ip_data if ip['InstanceId'] not in {e['InstanceId'] for e in updated_ips}])
             
         else:
@@ -287,6 +290,7 @@ def find_existing_instances():
         print(f"Error fetching existing instances: {e}")
     except botocore.exceptions.WaiterError as e:
         print(f"Error waiting for instances to start: {e}")
+
 
 
 def terminate_instances():
