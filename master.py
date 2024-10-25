@@ -27,12 +27,13 @@ def main_menu():
     print("4. Run new JMeter test on all slaves")
     print("5. Analyze previous load test results")
     print("6. Terminate all instances and clear INSTANCE_IPS_FILE")
-    print("7. Exit")
+    print("7. Check health of all slave instances")  # New menu option
+    print("8. Exit")
 
     while True:
         try:
             choice = int(input("Enter your choice: "))
-            if 1 <= choice <= 7:
+            if 1 <= choice <= 8:
                 return choice
             else:
                 print("Invalid choice. Please try again.")
@@ -189,6 +190,10 @@ def main():
             terminate_instances()
 
         elif choice == 7:
+            # Check health of all slave instances
+            check_all_slaves_health()
+
+        elif choice == 8:
             print("Exiting the program.")
             break
 
