@@ -1,6 +1,7 @@
 import json
 import time
 import boto3
+import botocore
 import requests
 import os
 import subprocess
@@ -21,6 +22,20 @@ def load_defaults():
     else:
         print(f"No defaults file found at {defaults_file_path}")
         return {}
+
+def get_instance_public_ips(ec2_client, instance_ids):
+    """Retrieve public IPs of the instances using EC2 client."""
+    print("Fetching public IP addresses for instances...")
+    instances = ec2_client.describe_instances(InstanceIds=instance_ids)
+    ip_data = []
+    for reservation in instances['Reservations']:
+        for instance in reservation['Instances']:
+            ip_data.append({
+                'InstanceId': instance['InstanceId'],
+                'PublicIpAddress': instance.get('PublicIpAddress', 'N/A'),
+                'PrivateIpAddress': instance['PrivateIpAddress']
+            })
+    return ip_data
 
 
 def create_cloudformation_stack():
@@ -46,52 +61,55 @@ def create_cloudformation_stack():
     # Start the CloudFormation stack
     stack_name = "JMeterLoadTestStack"
     print("Creating CloudFormation stack...")
-    cloudformation_client.create_stack(
-        StackName=stack_name,
-        TemplateBody=template_body,
-        Parameters=[
-            {'ParameterKey': 'VpcId', 'ParameterValue': defaults.get('VpcId')}, 
-            {'ParameterKey': 'SubnetId', 'ParameterValue': defaults.get('SubnetId')},
-            {'ParameterKey': 'SSHKeyName', 'ParameterValue': defaults.get('SSHKeyName')},
-            {'ParameterKey': 'AMIId', 'ParameterValue': defaults.get('AMIId')},
-            {'ParameterKey': 'InstanceType', 'ParameterValue': defaults.get('InstanceType')},
-            {'ParameterKey': 'NumberOfInstances', 'ParameterValue': defaults.get('NumberOfInstances')},
-        ],
-        Capabilities=['CAPABILITY_IAM'],
-    )
+    
+    try:
+        cloudformation_client.create_stack(
+            StackName=stack_name,
+            TemplateBody=template_body,
+            Parameters=[
+                {'ParameterKey': 'VpcId', 'ParameterValue': defaults.get('VpcId')}, 
+                {'ParameterKey': 'SubnetId', 'ParameterValue': defaults.get('SubnetId')},
+                {'ParameterKey': 'SSHKeyName', 'ParameterValue': defaults.get('SSHKeyName')},
+                {'ParameterKey': 'AMIId', 'ParameterValue': defaults.get('AMIId')},
+                {'ParameterKey': 'InstanceType', 'ParameterValue': defaults.get('InstanceType')},
+                {'ParameterKey': 'NumberOfInstances', 'ParameterValue': defaults.get('NumberOfInstances')},
+            ],
+            Capabilities=['CAPABILITY_IAM'],
+        )
 
-    # Wait for the CloudFormation stack to be created
-    print("Waiting for stack creation to complete...")
-    waiter = cloudformation_client.get_waiter('stack_create_complete')
-    waiter.wait(StackName=stack_name)
+        # Wait for the CloudFormation stack to be created
+        print("Waiting for stack creation to complete...")
+        waiter = cloudformation_client.get_waiter('stack_create_complete')
+        waiter.wait(StackName=stack_name)
+        print("CloudFormation stack created successfully.")
 
-    # Get the list of instance IDs created by the stack
-    stack_resources = cloudformation_client.describe_stack_resources(StackName=stack_name)
-    instance_ids = [resource['PhysicalResourceId'] for resource in stack_resources['StackResources']
-                    if resource['ResourceType'] == 'AWS::EC2::Instance']
+        # Get the list of instance IDs created by the stack's AutoScalingGroup
+        stack_resources = cloudformation_client.describe_stack_resources(StackName=stack_name)
+        instance_ids = [resource['PhysicalResourceId'] for resource in stack_resources['StackResources']
+                        if resource['ResourceType'] == 'AWS::EC2::Instance']
 
-    print(f"Instances created: {instance_ids}")
+        # Wait for all instances to be running
+        print("Waiting for EC2 instances to be in 'running' state...")
+        ec2_client.get_waiter('instance_running').wait(InstanceIds=instance_ids)
 
-    # Wait for all instances to be running
-    print("Waiting for EC2 instances to be in 'running' state...")
-    ec2_client.get_waiter('instance_running').wait(InstanceIds=instance_ids)
+        # Fetch public and private IP addresses of the instances
+        ip_data = get_instance_public_ips(ec2_client, instance_ids)
 
-    # Collect public and private IP addresses
-    instances = ec2_client.describe_instances(InstanceIds=instance_ids)
-    ip_data = []
-    for reservation in instances['Reservations']:
-        for instance in reservation['Instances']:
-            ip_data.append({
-                'InstanceId': instance['InstanceId'],
-                'PublicIpAddress': instance.get('PublicIpAddress', 'N/A'),
-                'PrivateIpAddress': instance['PrivateIpAddress']
-            })
+        # Save IP addresses to a JSON file
+        with open(INSTANCE_IPS_FILE, 'w') as ip_file:
+            json.dump(ip_data, ip_file, indent=4)
 
-    # Save IP addresses to a JSON file
-    with open(INSTANCE_IPS_FILE, 'w') as ip_file:
-        json.dump(ip_data, ip_file, indent=4)
+        print(f"Instance IPs saved to {INSTANCE_IPS_FILE}")
 
-    print(f"Instance IPs saved to {INSTANCE_IPS_FILE}")
+    except botocore.exceptions.WaiterError as e:
+        print(f"CloudFormation stack creation failed: {str(e)}")
+
+        # Fetch stack events to understand what went wrong
+        events = cloudformation_client.describe_stack_events(StackName=stack_name)
+        for event in events['StackEvents']:
+            print(f"Resource: {event['LogicalResourceId']}, Status: {event['ResourceStatus']}, Reason: {event.get('ResourceStatusReason', 'N/A')}")
+        
+        raise
 
 
 def load_instance_ips():

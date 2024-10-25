@@ -103,6 +103,6 @@ Resources:
           PropagateAtLaunch: true
 
 Outputs:
-  EC2InstancePublicIP:
-    Description: The public IP of the first EC2 instance
-    Value: !GetAtt EC2InstanceAutoScalingGroup.PublicIp
+  EC2InstanceIds:
+    Description: The instance IDs of the instances created by the Auto Scaling Group
+    Value: !Ref EC2InstanceAutoScalingGroup
