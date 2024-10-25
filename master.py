@@ -88,12 +88,43 @@ def start_test_on_all_slaves(jmx_file):
             break
         time.sleep(10)  # Poll every 10 seconds
 
-    # Analyze results after the test is complete
-    result_file = get_latest_results_file()
-    if result_file:
+    # Fetch and analyze results from each slave
+    fetch_and_analyze_results()
+
+
+
+def fetch_and_analyze_results():
+    """Fetch results from all slaves and analyze them one by one."""
+    if not os.path.exists(INSTANCE_IPS_FILE):
+        print("INSTANCE_IPS_FILE not found. Please ensure instances are launched and registered.")
+        return
+
+    # Load instance IPs from the file
+    with open(INSTANCE_IPS_FILE, 'r') as file:
+        instance_ips = json.load(file)
+
+    all_results = []
+    for instance in instance_ips:
+        ip = instance['PublicIpAddress'] if instance['PublicIpAddress'] != 'N/A' else instance['PrivateIpAddress']
+        url = f"http://{ip}:5000/get-results"
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                result_file_name = f"{instance['InstanceId']}_results.jtl"
+                with open(result_file_name, 'wb') as f:
+                    f.write(response.content)
+                print(f"Fetched result from {ip} and saved as {result_file_name}")
+                all_results.append(result_file_name)
+            else:
+                print(f"No results available from {ip}.")
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to fetch results from {ip}: {e}")
+
+    # Analyze each result file
+    for result_file in all_results:
+        print(f"Analyzing results from {result_file}...")
         analyze_results(result_file)
-    else:
-        print("No results file found after the test.")
+
 
 
 def sync_jmx_files():

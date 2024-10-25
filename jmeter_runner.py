@@ -94,6 +94,7 @@ def analyze_results(result_file="results-file.jtl"):
         for error, count in top_5xx_errors:
             print(f"Error: {error}: {count}")
 
+
 def get_latest_results_file():
     """Return the path to the latest `results-file.jtl`."""
     result_file = "results-file.jtl"
