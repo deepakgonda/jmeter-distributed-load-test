@@ -191,7 +191,7 @@ def launch_instances(instance_count):
             python3 -m venv venv
             source venv/bin/activate
             pip install -r requirements.txt
-            nohup python3 slave.py &
+            nohup python3 slave.py > flask.log 2>&1 &
             """
         )
 
