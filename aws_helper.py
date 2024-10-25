@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import botocore
+import time
 
 INSTANCE_IPS_FILE = "instance_ips.json"
 
@@ -212,31 +213,80 @@ def launch_instances():
 
 
 def find_existing_instances():
-    """Find existing instances with the Name tag 'Ubuntu-Jmeter-Load-Test-Slave-{{i}}'."""
+    """Find, filter, and ensure instances with the Name tag 'Ubuntu-Jmeter-Load-Test-Slave-{{i}}' are running."""
     region = get_region()
     ec2_client = boto3.client('ec2', region_name=region)
+
     try:
+        # Fetch all instances with the specified Name tag
         instances = ec2_client.describe_instances(
             Filters=[{
                 'Name': 'tag:Name',
                 'Values': ['Ubuntu-Jmeter-Load-Test-Slave-*']
             }]
         )
-        ip_data = get_instance_public_ips(ec2_client, [i['InstanceId'] for r in instances['Reservations'] for i in r['Instances']])
+        
+        # Prepare lists to track instance states
+        instance_ids = []
+        stopped_instances = []
+        running_instances = []
+        terminated_instances = []
+        
+        # Classify each instance based on its state
+        for reservation in instances['Reservations']:
+            for instance in reservation['Instances']:
+                instance_id = instance['InstanceId']
+                state = instance['State']['Name']
+                
+                if state == 'terminated':
+                    terminated_instances.append(instance_id)
+                elif state == 'stopped':
+                    stopped_instances.append(instance_id)
+                elif state == 'running':
+                    running_instances.append(instance_id)
+                    instance_ids.append(instance_id)  # Collect running instance IDs
+                else:
+                    instance_ids.append(instance_id)  # Include pending instances as well
+
+        print(f"Found {len(instance_ids)} instances with tag 'Ubuntu-Jmeter-Load-Test-Slave-*'.")
+        print(f"Instances running: {len(running_instances)}, stopped: {len(stopped_instances)}, terminated: {len(terminated_instances)}")
+        
+        # Start stopped instances
+        if stopped_instances:
+            print(f"Starting {len(stopped_instances)} stopped instances...")
+            ec2_client.start_instances(InstanceIds=stopped_instances)
+            instance_ids.extend(stopped_instances)
+
+        # Wait for all instances (running + started) to reach the running state
+        print("Waiting for all instances to be in 'running' state...")
+        ec2_client.get_waiter('instance_running').wait(InstanceIds=instance_ids)
+
+        # Re-fetch IP data now that all instances should be running
+        ip_data = get_instance_public_ips(ec2_client, instance_ids)
+        
+        # Load existing IP data from file and filter out terminated instances
         if os.path.exists(INSTANCE_IPS_FILE):
             with open(INSTANCE_IPS_FILE, 'r') as f:
                 existing_ips = json.load(f)
-            ip_data = [i for i in ip_data if i['InstanceId'] not in [e['InstanceId'] for e in existing_ips]]
-            existing_ips.extend(ip_data)
+            
+            # Remove any instances in the file that are terminated or no longer exist
+            updated_ips = [entry for entry in existing_ips if entry['InstanceId'] not in terminated_instances]
+            updated_ips.extend([ip for ip in ip_data if ip['InstanceId'] not in {e['InstanceId'] for e in updated_ips}])
+            
         else:
-            existing_ips = ip_data
+            # No existing file, so all IP data is new
+            updated_ips = ip_data
 
+        # Write the updated list to INSTANCE_IPS_FILE
         with open(INSTANCE_IPS_FILE, 'w') as ip_file:
-            json.dump(existing_ips, ip_file, indent=4)
+            json.dump(updated_ips, ip_file, indent=4)
 
-        print(f"Updated {INSTANCE_IPS_FILE} with existing instances.")
+        print(f"Updated {INSTANCE_IPS_FILE} with a total of {len(updated_ips)} instances, all in 'running' state.")
+
     except botocore.exceptions.ClientError as e:
         print(f"Error fetching existing instances: {e}")
+    except botocore.exceptions.WaiterError as e:
+        print(f"Error waiting for instances to start: {e}")
 
 
 def terminate_instances():
