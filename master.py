@@ -38,62 +38,167 @@ def get_instance_public_ips(ec2_client, instance_ids):
     return ip_data
 
 
-def create_cloudformation_stack():
-    """Run CloudFormation template to create EC2 instances and wait for completion."""
+def create_security_group(ec2_client, vpc_id, region):
+    """Create a security group with necessary rules for JMeter load test."""
+    sg_name = "JMeterLoadTestSG"
+    description = "Security group for JMeter load test instances"
+
+    # First, check if the security group already exists in the VPC
+    try:
+        existing_sg = ec2_client.describe_security_groups(
+            Filters=[
+                {'Name': 'group-name', 'Values': [sg_name]},
+                {'Name': 'vpc-id', 'Values': [vpc_id]}
+            ]
+        )
+        
+        # If a security group with the same name is found, return its GroupId
+        if existing_sg['SecurityGroups']:
+            security_group_id = existing_sg['SecurityGroups'][0]['GroupId']
+            print(f"Security Group {sg_name} already exists with ID {security_group_id}. Reusing it.")
+            return security_group_id
+        else:
+            print(f"No existing security group named {sg_name} found. Creating a new one.")
+    
+    except botocore.exceptions.ClientError as e:
+        print(f"Error checking security group: {e}")
+        return None
+
+    # If no security group exists, create a new one
+    try:
+        # Create the security group
+        response = ec2_client.create_security_group(
+            GroupName=sg_name,
+            Description=description,
+            VpcId=vpc_id
+        )
+        
+        security_group_id = response['GroupId']
+        print(f"Security Group Created {security_group_id} in VPC {vpc_id}")
+
+        # Add ingress rules to allow SSH and application ports
+        ec2_client.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpPermissions=[
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 22,
+                    'ToPort': 22,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]  # SSH
+                },
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 80,
+                    'ToPort': 80,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]  # HTTP
+                },
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 5000,
+                    'ToPort': 5000,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]  # Application Port
+                },
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 8000,
+                    'ToPort': 8000,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]  # Application Port
+                },
+                {
+                    'IpProtocol': 'tcp',
+                    'FromPort': 8080,
+                    'ToPort': 8080,
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}]  # Application Port
+                }
+            ]
+        )
+        print("Ingress rules successfully added to the security group.")
+        return security_group_id
+
+    except botocore.exceptions.ClientError as e:
+        print(f"Error creating security group: {e}")
+        return None
+
+
+def launch_instances():
+    """Launch EC2 instances and wait for them to be in running state."""
     # Load default parameters from the JSON file
     defaults = load_defaults()
     
     if not defaults:
-        print("No defaults loaded, cannot proceed with stack creation.")
+        print("No defaults loaded, cannot proceed with instance launch.")
         return
 
     region = defaults.get('Region', 'us-east-1')  # Default to 'us-east-1' if not specified
 
-    # Initialize CloudFormation and EC2 clients with the specified region
-    cloudformation_client = boto3.client('cloudformation', region_name=region)
+    # Initialize EC2 client with the specified region
     ec2_client = boto3.client('ec2', region_name=region)
 
-    # Define the CloudFormation template path within the repository
-    template_file_path = os.path.join(os.getcwd(), "cloudformation", "launch-slaves.yaml")
-    with open(template_file_path, 'r') as template_file:
-        template_body = template_file.read()
+    # Extract instance parameters from the defaults file
+    instance_count = int(defaults.get('NumberOfInstances', 1))
+    instance_type = defaults.get('InstanceType', 't3.2xlarge')
+    ami_id = defaults.get('AMIId')
+    subnet_id = defaults.get('SubnetId')
+    ssh_key_name = defaults.get('SSHKeyName')
+    vpc_id = defaults.get('VpcId')
 
-    # Start the CloudFormation stack
-    stack_name = "JMeterLoadTestStack"
-    print("Creating CloudFormation stack...")
-    
+    if not ami_id or not subnet_id or not ssh_key_name or not vpc_id:
+        print("AMIId, SubnetId, SSHKeyName, and VpcId are required in launch-defaults.json.")
+        return
+
+    # Create the security group
+    security_group_id = create_security_group(ec2_client, vpc_id, region)
+    if not security_group_id:
+        print("Failed to create or retrieve security group. Aborting instance launch.")
+        return
+
+    print(f"Launching {instance_count} EC2 instance(s) with AMI ID: {ami_id}")
+
+    # Launch instances
     try:
-        cloudformation_client.create_stack(
-            StackName=stack_name,
-            TemplateBody=template_body,
-            Parameters=[
-                {'ParameterKey': 'VpcId', 'ParameterValue': defaults.get('VpcId')}, 
-                {'ParameterKey': 'SubnetId', 'ParameterValue': defaults.get('SubnetId')},
-                {'ParameterKey': 'SSHKeyName', 'ParameterValue': defaults.get('SSHKeyName')},
-                {'ParameterKey': 'AMIId', 'ParameterValue': defaults.get('AMIId')},
-                {'ParameterKey': 'InstanceType', 'ParameterValue': defaults.get('InstanceType')},
-                {'ParameterKey': 'NumberOfInstances', 'ParameterValue': defaults.get('NumberOfInstances')},
-            ],
-            Capabilities=['CAPABILITY_IAM'],
+        instances = ec2_client.run_instances(
+            ImageId=ami_id,
+            InstanceType=instance_type,
+            KeyName=ssh_key_name,
+            MaxCount=instance_count,
+            MinCount=instance_count,
+            SubnetId=subnet_id,
+            SecurityGroupIds=[security_group_id],
+            UserData="""#!/bin/bash
+            sudo apt update -y
+            sudo apt install -y git python3-venv python3-pip
+            cd /home/ubuntu/
+            if [ ! -d "load-test" ]; then
+              mkdir load-test
+            fi
+            cd load-test
+            git clone https://github.com/deepakgonda/jmeter-distributed-load-test.git
+            cd jmeter-distributed-load-test
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
+            nohup python3 slave.py &
+            """
         )
 
-        # Wait for the CloudFormation stack to be created
-        print("Waiting for stack creation to complete...")
-        waiter = cloudformation_client.get_waiter('stack_create_complete')
-        waiter.wait(StackName=stack_name)
-        print("CloudFormation stack created successfully.")
+        # Collect instance IDs for tracking
+        instance_ids = [instance['InstanceId'] for instance in instances['Instances']]
+        print("Instances launched:", instance_ids)
 
-        # Get the list of instance IDs created by the stack's AutoScalingGroup
-        stack_resources = cloudformation_client.describe_stack_resources(StackName=stack_name)
-        instance_ids = [resource['PhysicalResourceId'] for resource in stack_resources['StackResources']
-                        if resource['ResourceType'] == 'AWS::EC2::Instance']
-
-        # Wait for all instances to be running
+        # Wait for all instances to be in 'running' state
         print("Waiting for EC2 instances to be in 'running' state...")
         ec2_client.get_waiter('instance_running').wait(InstanceIds=instance_ids)
-
+        
         # Fetch public and private IP addresses of the instances
-        ip_data = get_instance_public_ips(ec2_client, instance_ids)
+        ip_data = []
+        instance_descriptions = ec2_client.describe_instances(InstanceIds=instance_ids)
+        for reservation in instance_descriptions['Reservations']:
+            for instance in reservation['Instances']:
+                ip_data.append({
+                    'InstanceId': instance['InstanceId'],
+                    'PublicIpAddress': instance.get('PublicIpAddress', 'N/A'),
+                    'PrivateIpAddress': instance['PrivateIpAddress']
+                })
 
         # Save IP addresses to a JSON file
         with open(INSTANCE_IPS_FILE, 'w') as ip_file:
@@ -101,15 +206,8 @@ def create_cloudformation_stack():
 
         print(f"Instance IPs saved to {INSTANCE_IPS_FILE}")
 
-    except botocore.exceptions.WaiterError as e:
-        print(f"CloudFormation stack creation failed: {str(e)}")
-
-        # Fetch stack events to understand what went wrong
-        events = cloudformation_client.describe_stack_events(StackName=stack_name)
-        for event in events['StackEvents']:
-            print(f"Resource: {event['LogicalResourceId']}, Status: {event['ResourceStatus']}, Reason: {event.get('ResourceStatusReason', 'N/A')}")
-        
-        raise
+    except botocore.exceptions.ClientError as e:
+        print(f"Error launching instances: {e}")
 
 
 def load_instance_ips():
@@ -210,14 +308,14 @@ def main():
 
         if choice == 1:
             # Run CloudFormation stack and gather IPs
-            create_cloudformation_stack()
+            launch_instances()
 
         elif choice == 2:
             # List and choose JMX file from the 'load_test' directory
             jmx_files = [f for f in os.listdir(load_test_dir) if f.endswith('.jmx')]
             if not jmx_files:
-                print("No JMX files found.")
-                return
+                print("No JMX files found. Returning to the main menu.")
+                continue
 
             if len(jmx_files) == 1:
                 chosen_file = jmx_files[0]
@@ -247,6 +345,7 @@ def main():
                 analyze_results(os.path.join(load_test_dir, jtl_files[0]))
             else:
                 print("No JTL files available for analysis.")
+                continue
 
         elif choice == 4:
             print("Exiting the program.")
