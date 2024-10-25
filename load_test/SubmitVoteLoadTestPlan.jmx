@@ -37,7 +37,8 @@
                 <stringProp name="Argument.value">
                   <![CDATA[{
                     "slug": "serious-3VSserious-8",
-                    "vote": "จัยเอมเอม"
+                    "vote": "จัยเอมเอม",
+                    "team": A
                   }]]>
                 </stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
