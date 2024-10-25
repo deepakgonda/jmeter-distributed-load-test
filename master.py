@@ -171,11 +171,22 @@ def main():
                 print("No JMX files found. Returning to the main menu.")
                 continue
 
-            if len(jmx_files) == 1:
-                chosen_file = jmx_files[0]
-            else:
-                print(f"Available JMX files: {jmx_files}")
-                chosen_file = input("Choose JMX file: ")
+            # Display each file with a corresponding number
+            print("Available JMX files:")
+            for idx, jmx_file in enumerate(jmx_files, start=1):
+                print(f"{idx}. {jmx_file}")
+
+            # Prompt user to choose a file by entering the corresponding number
+            while True:
+                try:
+                    file_choice = int(input("Enter the number of the JMX file you want to use: "))
+                    if 1 <= file_choice <= len(jmx_files):
+                        chosen_file = jmx_files[file_choice - 1]
+                        break
+                    else:
+                        print("Invalid choice. Please enter a number from the list.")
+                except ValueError:
+                    print("Invalid input. Please enter a number.")
 
             chosen_file_path = os.path.join(load_test_dir, chosen_file)
 
