@@ -22,7 +22,7 @@
       </ThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request">
-          <stringProp name="HTTPSampler.domain">nextjs-viu-voting-alb-1596098912.ap-southeast-1.elb.amazonaws.com</stringProp>
+          <stringProp name="HTTPSampler.domain">nextjs-viu-voting-alb-111111111111.ap-southeast-1.elb.amazonaws.com</stringProp>
           <stringProp name="HTTPSampler.protocol">http</stringProp>
           <stringProp name="HTTPSampler.path">/api/submitVote</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>

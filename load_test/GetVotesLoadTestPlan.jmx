@@ -22,7 +22,7 @@
       </ThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request">
-          <stringProp name="HTTPSampler.domain">nextjs-viu-voting-alb-1596098912.ap-southeast-1.elb.amazonaws.com</stringProp>
+          <stringProp name="HTTPSampler.domain">nextjs-viu-voting-alb-1111111111.ap-southeast-1.elb.amazonaws.com</stringProp>
           <stringProp name="HTTPSampler.protocol">http</stringProp>
           <stringProp name="HTTPSampler.path">/api/getVote</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
@@ -34,17 +34,7 @@
             <collectionProp name="Arguments.arguments">
               <elementProp name="slug" elementType="HTTPArgument">
                 <boolProp name="HTTPArgument.always_encode">true</boolProp>
-                <stringProp name="Argument.value">serious-3VSserious-8</stringProp>
-                <stringProp name="Argument.metadata">=</stringProp>
-              </elementProp>
-              <elementProp name="teamName1" elementType="HTTPArgument">
-                <boolProp name="HTTPArgument.always_encode">true</boolProp>
-                <stringProp name="Argument.value">อ่อ...อิหยั่งวะ?</sringProp>
-                <stringProp name="Argument.metadata">=</stringProp>
-              </elementProp>
-              <elementProp name="teamName2" elementType="HTTPArgument">
-                <boolProp name="HTTPArgument.always_encode">true</boolProp>
-                <stringProp name="Argument.value">จัยเอมเอม</stringProp>
+                <stringProp name="Argument.value">serious-1VSserious-2</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>
