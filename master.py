@@ -143,7 +143,14 @@ def main():
             find_existing_instances()
 
         elif choice == 2:
-            launch_instances()
+            try:
+                instance_count = int(input("Enter the number of instances to launch: "))
+                if instance_count <= 0:
+                    print("Please enter a positive number.")
+                    continue
+                launch_instances(instance_count)
+            except ValueError:
+                print("Invalid input. Please enter a valid number.")
 
         elif choice == 3:
             # Sync .jmx files from master to all slaves

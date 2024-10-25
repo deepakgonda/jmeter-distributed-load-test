@@ -130,7 +130,7 @@ def create_security_group(ec2_client, vpc_id, region):
         return None
 
 
-def launch_instances():
+def launch_instances(instance_count):
     """Launch EC2 instances and wait for them to be in running state."""
     defaults = load_defaults()
     if not defaults:
@@ -142,7 +142,7 @@ def launch_instances():
     region = get_region()
     ec2_client = boto3.client('ec2', region_name=region)
 
-    instance_count = int(defaults.get('NumberOfInstances', 1))
+    # instance_count = int(defaults.get('NumberOfInstances', 1))
     instance_type = defaults.get('InstanceType', 't3.2xlarge')
     ami_id = defaults.get('AMIId')
     subnet_id = defaults.get('SubnetId')

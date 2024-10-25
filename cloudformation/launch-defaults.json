@@ -4,6 +4,5 @@
     "SSHKeyName": "com7-deeboon",
     "AMIId": "ami-06c7dd7d8180fe673",
     "InstanceType": "t3.2xlarge",
-    "NumberOfInstances": "1",
     "Region": "ap-southeast-1"
 }
