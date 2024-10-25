@@ -18,6 +18,12 @@ def load_defaults():
         return {}
 
 
+def get_region():
+    """Load region from defaults or use a default region."""
+    defaults = load_defaults()
+    return defaults.get("Region", "us-east-1")  # Default to 'us-east-1' if not specified
+
+
 def get_next_instance_index():
     """Get the next instance index from the INSTANCE_IPS_FILE."""
     if os.path.exists(INSTANCE_IPS_FILE):
@@ -131,6 +137,7 @@ def launch_instances():
 
     region = defaults.get('Region', 'us-east-1')
 
+    region = get_region()
     ec2_client = boto3.client('ec2', region_name=region)
 
     instance_count = int(defaults.get('NumberOfInstances', 1))
@@ -205,7 +212,8 @@ def launch_instances():
 
 def find_existing_instances():
     """Find existing instances with the Name tag 'Ubuntu-Jmeter-Load-Test-Slave-{{i}}'."""
-    ec2_client = boto3.client('ec2')
+    region = get_region()
+    ec2_client = boto3.client('ec2', region_name=region)
     try:
         instances = ec2_client.describe_instances(
             Filters=[{
@@ -232,7 +240,8 @@ def find_existing_instances():
 
 def terminate_instances():
     """Terminate all instances with the Name tag 'Ubuntu-Jmeter-Load-Test-Slave-{{i}}' and clear the INSTANCE_IPS_FILE."""
-    ec2_client = boto3.client('ec2')
+    region = get_region()
+    ec2_client = boto3.client('ec2', region_name=region)
     try:
         instances = ec2_client.describe_instances(
             Filters=[{
