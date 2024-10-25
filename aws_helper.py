@@ -34,7 +34,7 @@ def get_next_instance_index():
 
 
 def get_instance_public_ips(ec2_client, instance_ids):
-    """Retrieve public IPs of the instances using EC2 client."""
+    """Retrieve public and private IPs of the instances using EC2 client."""
     print("Fetching public IP addresses for instances...")
     instances = ec2_client.describe_instances(InstanceIds=instance_ids)
     ip_data = []
@@ -43,9 +43,10 @@ def get_instance_public_ips(ec2_client, instance_ids):
             ip_data.append({
                 'InstanceId': instance['InstanceId'],
                 'PublicIpAddress': instance.get('PublicIpAddress', 'N/A'),
-                'PrivateIpAddress': instance['PrivateIpAddress']
+                'PrivateIpAddress': instance.get('PrivateIpAddress', 'N/A')
             })
     return ip_data
+
 
 
 def create_security_group(ec2_client, vpc_id, region):
