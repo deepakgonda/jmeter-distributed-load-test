@@ -104,6 +104,12 @@ def sync_jmx_files():
     # Load instance IPs
     with open(INSTANCE_IPS_FILE, 'r') as file:
         instance_ips = json.load(file)
+
+    # Check all slaves health...
+    all_healthy = check_all_slaves_health()
+    if not all_healthy:
+        print("Some of slaves are not healthy, cannot sync")
+        return
     
     load_test_dir = 'load_test'
     jmx_files = [f for f in os.listdir(load_test_dir) if f.endswith('.jmx')]
