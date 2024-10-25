@@ -6,6 +6,32 @@ from jmeter_runner import run_jmeter_test, check_jmeter_status, get_latest_resul
 app = Flask(__name__)
 jmeter_process = None  # Global variable to store the JMeter process handle
 
+LOAD_TEST_DIR = "load_test"
+if not os.path.exists(LOAD_TEST_DIR):
+    os.makedirs(LOAD_TEST_DIR)
+
+
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    """Endpoint to check if the slave instance is up and running."""
+    return jsonify({"status": "success", "message": "Slave instance is up and running."})
+
+
+
+@app.route("/sync-jmx", methods=["POST"])
+def sync_jmx():
+    """Endpoint to receive .jmx files and save them to the load_test directory."""
+    file = request.files.get('file')
+    if file and file.filename.endswith(".jmx"):
+        file_path = os.path.join(LOAD_TEST_DIR, file.filename)
+        file.save(file_path)
+        return jsonify({"status": "success", "message": f"File {file.filename} saved successfully."})
+    else:
+        return jsonify({"status": "error", "message": "Invalid file format. Only .jmx files are accepted."}), 400
+
+
+
 @app.route('/start-test', methods=['POST'])
 def start_test():
     """Receive a command from the master to start the JMeter test."""
