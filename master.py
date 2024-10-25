@@ -19,6 +19,7 @@ INSTANCE_IPS_FILE = "instance_ips.json"
 
 def main_menu():
     """Display the main menu and get user choice."""
+    print("\n\n\n")
     print("Main Menu:")
     print("1. Find and update existing instances in INSTANCE_IPS_FILE")
     print("2. Launch EC2 instances")
