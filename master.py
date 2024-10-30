@@ -73,20 +73,21 @@ def check_all_slaves_health():
 def continuous_health_check():
     """Continuously check health of all instances until they are healthy or user interrupts."""
     print("Checking the health of all slave instances. Press 'q' to stop.")
+    all_instances_healthy = False
     
     def check_health_loop():
-        while True:
-            if check_all_slaves_health():
+        nonlocal all_instances_healthy
+        while not all_instances_healthy:
+            all_instances_healthy = check_all_slaves_health()
+            if all_instances_healthy:
                 print("All instances are healthy!")
                 break
             print("Some instances are still unreachable. Retrying in 10 seconds...")
             time.sleep(10)
 
-    # Start health check in a separate thread
     health_thread = threading.Thread(target=check_health_loop)
     health_thread.start()
 
-    # Wait for user input to stop
     while health_thread.is_alive():
         if input().lower() == 'q':
             print("Stopping health checks.")
