@@ -2,6 +2,7 @@ import os
 import json
 import requests
 import time
+import threading
 from aws_helper import (
     find_existing_instances,
     launch_instances,
@@ -67,6 +68,33 @@ def check_all_slaves_health():
             all_healthy = False
 
     return all_healthy
+
+
+def continuous_health_check():
+    """Continuously check health of all instances until they are healthy or user interrupts."""
+    print("Checking the health of all slave instances. Press 'q' to stop.")
+    
+    def check_health_loop():
+        while True:
+            if check_all_slaves_health():
+                print("All instances are healthy!")
+                break
+            print("Some instances are still unreachable. Retrying in 10 seconds...")
+            time.sleep(10)
+
+    # Start health check in a separate thread
+    health_thread = threading.Thread(target=check_health_loop)
+    health_thread.start()
+
+    # Wait for user input to stop
+    while health_thread.is_alive():
+        if input().lower() == 'q':
+            print("Stopping health checks.")
+            break
+        time.sleep(1)
+
+    health_thread.join()  # Ensure the thread exits before continuing
+
 
 
 def start_test_on_all_slaves(jmx_file):
@@ -188,6 +216,8 @@ def main():
                     print("Please enter a positive number.")
                     continue
                 launch_instances(instance_count)
+                # Perform continuous health check after launching instances
+                continuous_health_check()
             except ValueError:
                 print("Invalid input. Please enter a valid number.")
 
