@@ -137,12 +137,9 @@ def launch_instances(instance_count):
         print("No defaults loaded, cannot proceed with instance launch.")
         return
 
-    region = defaults.get('Region', 'us-east-1')
-
     region = get_region()
     ec2_client = boto3.client('ec2', region_name=region)
 
-    # instance_count = int(defaults.get('NumberOfInstances', 1))
     instance_type = defaults.get('InstanceType', 't3.2xlarge')
     ami_id = defaults.get('AMIId')
     subnet_id = defaults.get('SubnetId')
@@ -163,6 +160,7 @@ def launch_instances(instance_count):
     print(f"Launching {instance_count} EC2 instance(s) with AMI ID: {ami_id}")
 
     try:
+        # Launch instances with unique Name tags for each instance
         instances = ec2_client.run_instances(
             ImageId=ami_id,
             InstanceType=instance_type,
@@ -171,13 +169,6 @@ def launch_instances(instance_count):
             MinCount=instance_count,
             SubnetId=subnet_id,
             SecurityGroupIds=[security_group_id],
-            TagSpecifications=[{
-                'ResourceType': 'instance',
-                'Tags': [
-                    {'Key': 'Name', 'Value': f"Ubuntu-Jmeter-Load-Test-Slave-{next_index + i}"}
-                    for i in range(instance_count)
-                ]
-            }],
             UserData="""#!/bin/bash
             sudo apt update -y
             sudo apt install -y git python3-venv python3-pip
@@ -192,7 +183,13 @@ def launch_instances(instance_count):
             source venv/bin/activate
             pip install -r requirements.txt
             nohup python3 slave.py > flask.log 2>&1 &
-            """
+            """,
+            TagSpecifications=[
+                {
+                    'ResourceType': 'instance',
+                    'Tags': [{'Key': 'Name', 'Value': f"Ubuntu-Jmeter-Load-Test-Slave-{next_index + i}"}]
+                } for i in range(instance_count)
+            ]
         )
 
         instance_ids = [instance['InstanceId'] for instance in instances['Instances']]
@@ -210,6 +207,7 @@ def launch_instances(instance_count):
 
     except botocore.exceptions.ClientError as e:
         print(f"Error launching instances: {e}")
+
 
 
 def find_existing_instances():
