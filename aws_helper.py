@@ -155,12 +155,10 @@ def launch_instances(instance_count):
         print("Failed to create or retrieve security group. Aborting instance launch.")
         return
 
-    next_index = get_next_instance_index()
-
     print(f"Launching {instance_count} EC2 instance(s) with AMI ID: {ami_id}")
 
     try:
-        # Launch instances with unique Name tags for each instance
+        # Launch instances
         instances = ec2_client.run_instances(
             ImageId=ami_id,
             InstanceType=instance_type,
@@ -169,6 +167,12 @@ def launch_instances(instance_count):
             MinCount=instance_count,
             SubnetId=subnet_id,
             SecurityGroupIds=[security_group_id],
+            TagSpecifications=[
+                {
+                    'ResourceType': 'instance',
+                    'Tags': [{'Key': 'Name', 'Value': "Ubuntu-Jmeter-Load-Test-Slave"}]
+                }
+            ],
             UserData="""#!/bin/bash
             sudo apt update -y
             sudo apt install -y git python3-venv python3-pip
@@ -183,17 +187,18 @@ def launch_instances(instance_count):
             source venv/bin/activate
             pip install -r requirements.txt
             nohup python3 slave.py > flask.log 2>&1 &
-            """,
-            TagSpecifications=[
-                {
-                    'ResourceType': 'instance',
-                    'Tags': [{'Key': 'Name', 'Value': f"Ubuntu-Jmeter-Load-Test-Slave-{next_index + i}"}]
-                } for i in range(instance_count)
-            ]
+            """
         )
 
         instance_ids = [instance['InstanceId'] for instance in instances['Instances']]
         print("Instances launched:", instance_ids)
+
+        # Set unique names for each instance
+        for idx, instance_id in enumerate(instance_ids, start=get_next_instance_index()):
+            ec2_client.create_tags(
+                Resources=[instance_id],
+                Tags=[{'Key': 'Name', 'Value': f"Ubuntu-Jmeter-Load-Test-Slave-{idx}"}]
+            )
 
         print("Waiting for EC2 instances to be in 'running' state...")
         ec2_client.get_waiter('instance_running').wait(InstanceIds=instance_ids)
@@ -207,6 +212,7 @@ def launch_instances(instance_count):
 
     except botocore.exceptions.ClientError as e:
         print(f"Error launching instances: {e}")
+
 
 
 
